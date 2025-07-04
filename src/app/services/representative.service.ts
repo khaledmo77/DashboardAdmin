@@ -11,6 +11,25 @@ export interface RepresentativeDTO {
   phone: string;
 }
 
+export interface Pharmacy {
+  id: number;
+  name: string;
+  phoneNumber: string;
+  governate: string;
+  userName: string;
+  address: string;
+  areaId: number;
+  areaName: string;
+  orderCount?: number;
+}
+
+export interface RepresentativePharmaciesResponse {
+  representativeId: number;
+  representativeName: string;
+  pharmaciesCount: number;
+  pharmacies: Pharmacy[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class RepresentativeService {
   private baseUrl = 'http://www.pharmaatoncepredeploy.somee.com/api/Representative';
@@ -19,6 +38,10 @@ export class RepresentativeService {
 
   getAllRepresentatives(): Observable<any[]> {
     return this.http.get<any[]>(`${this.baseUrl}/GetAllRepresentatives`);
+  }
+
+  getPharmaciesByRepresentativeId(representativeId: number): Observable<RepresentativePharmaciesResponse> {
+    return this.http.get<RepresentativePharmaciesResponse>(`${this.baseUrl}/GetPharmaciesCountUsingId?id=${representativeId}`);
   }
 
   createRepresentative(rep: RepresentativeDTO): Observable<any> {

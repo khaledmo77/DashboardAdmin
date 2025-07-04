@@ -3,7 +3,8 @@ import { isPlatformBrowser } from '@angular/common';
 import { NgFor, CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
-import { RepresentativeService, RepresentativeDTO } from '../../services/representative.service';
+import { RepresentativeService, RepresentativeDTO, Pharmacy, RepresentativePharmaciesResponse } from '../../services/representative.service';
+import { OrderService } from '../../services/order.service';
 
 // Interfaces
 export type RepresentativeField = 'name' | 'address' | 'governate' | 'email' | 'password' | 'phone';
@@ -36,10 +37,17 @@ export interface ValidationErrors {
 })
 export class RepresentativeComponent implements OnInit, OnDestroy {
   representatives: Representative[] = [];
+  pharmacies: Pharmacy[] = [];
   showAddModal = false;
   showDeleteModal = false;
   submitting = false;
   deleting = false;
+  
+  // New properties for pharmacy view
+  isShowingPharmacies = false;
+  selectedRepresentative: Representative | null = null;
+  pharmaciesResponse: RepresentativePharmaciesResponse | null = null;
+  loadingPharmacies = false; // Separate loading state for pharmacies
 
   fields: RepresentativeField[] = ['name', 'address', 'governate', 'email', 'password', 'phone'];
   newRepresentative: RepresentativeDTO = this.getEmptyRepresentative();
@@ -50,6 +58,7 @@ export class RepresentativeComponent implements OnInit, OnDestroy {
 
   constructor(
     private representativeService: RepresentativeService,
+    private orderService: OrderService,
     private cdr: ChangeDetectorRef,
     private ngZone: NgZone,
     @Inject(PLATFORM_ID) private platformId: Object
@@ -228,9 +237,18 @@ export class RepresentativeComponent implements OnInit, OnDestroy {
   }
 
   loadRepresentatives(): void {
+    // Reset all pharmacy-related state
+    this.isShowingPharmacies = false;
+    this.selectedRepresentative = null;
+    this.pharmaciesResponse = null;
+    this.pharmacies = [];
+    this.submitting = false;
+    this.loadingPharmacies = false; // Reset pharmacy loading state
+    
     this.representativeService.getAllRepresentatives().subscribe({
       next: (data: Representative[]) => {
         this.representatives = data;
+        this.cdr.detectChanges();
       },
       error: (error) => {
         console.error('Error loading representatives:', error);
@@ -238,6 +256,70 @@ export class RepresentativeComponent implements OnInit, OnDestroy {
         this.showNotification('error', 'Failed to load representatives');
       }
     });
+  }
+
+  loadPharmaciesForRepresentative(representative: Representative): void {
+    if (this.loadingPharmacies) return;
+    this.selectedRepresentative = representative;
+    this.loadingPharmacies = true;
+    this.isShowingPharmacies = true;
+    this.cdr.detectChanges();
+    this.representativeService.getPharmaciesByRepresentativeId(representative.id).subscribe({
+      next: (response: RepresentativePharmaciesResponse) => {
+        this.ngZone.run(() => {
+          this.pharmaciesResponse = response;
+          this.pharmacies = response.pharmacies;
+          // Fetch order count for each pharmacy
+          if (this.pharmacies && this.pharmacies.length > 0) {
+            let completed = 0;
+            this.pharmacies.forEach((pharmacy, idx) => {
+              this.orderService.getOrdersByPharmacyId(pharmacy.id).subscribe({
+                next: (orderResp) => {
+                  this.pharmacies[idx].orderCount = orderResp.result?.items?.length || 0;
+                  completed++;
+                  if (completed === this.pharmacies.length) {
+                    this.loadingPharmacies = false;
+                    this.cdr.detectChanges();
+                  }
+                },
+                error: () => {
+                  this.pharmacies[idx].orderCount = 0;
+                  completed++;
+                  if (completed === this.pharmacies.length) {
+                    this.loadingPharmacies = false;
+                    this.cdr.detectChanges();
+                  }
+                }
+              });
+            });
+          } else {
+            this.loadingPharmacies = false;
+            this.cdr.detectChanges();
+          }
+        });
+      },
+      error: (error) => {
+        this.ngZone.run(() => {
+          this.loadingPharmacies = false;
+          this.isShowingPharmacies = false;
+          this.selectedRepresentative = null;
+          this.pharmaciesResponse = null;
+          this.pharmacies = [];
+          this.cdr.detectChanges();
+        });
+        this.showNotification('error', 'Failed to load pharmacies for this representative');
+      }
+    });
+  }
+
+  backToRepresentatives(): void {
+    this.isShowingPharmacies = false;
+    this.selectedRepresentative = null;
+    this.pharmaciesResponse = null;
+    this.pharmacies = [];
+    this.submitting = false; // Ensure loading state is reset
+    this.loadingPharmacies = false; // Reset pharmacy loading state
+    this.cdr.detectChanges();
   }
 
   openAddModal(): void {
@@ -287,27 +369,8 @@ export class RepresentativeComponent implements OnInit, OnDestroy {
     this.submitting = true;
     this.validationErrors = {};
   
-    const tempId = this.getNextTempId();
-    const optimisticRep: Representative = {
-      id: tempId,
-      name: this.newRepresentative.name,
-      code: this.generateTempCode(),
-      address: this.newRepresentative.address,
-      governate: this.newRepresentative.governate,
-      email: this.newRepresentative.email,
-      phone: this.newRepresentative.phone
-    };
-  
-    this.representatives.push(optimisticRep);
-    this.cdr.detectChanges(); // Update view immediately
-  
     this.representativeService.createRepresentative(this.newRepresentative).subscribe({
       next: (response: Representative) => {
-        const index = this.representatives.findIndex(r => r.id === tempId);
-        if (index !== -1 && response?.id) {
-          this.representatives[index] = response;
-        }
-  
         this.submitting = false;
         this.resetForm(); // ✅ force reset the form state
         this.showAddModal = false; // ✅ force hide modal
@@ -321,11 +384,11 @@ export class RepresentativeComponent implements OnInit, OnDestroy {
             });
           }, 50);
         });
-  
+
         this.showNotification('success', 'Representative added successfully!');
+        this.loadRepresentatives(); // Refresh the list from the API after add
       },
       error: (error) => {
-        this.representatives = this.representatives.filter(r => r.id !== tempId);
         this.submitting = false;
         if (error?.error && typeof error.error === 'object') {
           this.validationErrors = error.error;

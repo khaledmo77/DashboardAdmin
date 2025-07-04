@@ -1,13 +1,23 @@
 <div class="card">
   <div class="card-header">
-    <h4 class="card-title">Representative</h4>
-    <p class="card-category">Users Table</p>
-    <button class="btn btn-primary btn-sm float-right" style="margin-top: -38px;" (click)="openAddModal()" data-bs-toggle="" data-bs-placement="">
+    <h4 class="card-title" *ngIf="!isShowingPharmacies">Representative</h4>
+    <h4 class="card-title" *ngIf="isShowingPharmacies">Pharmacies for {{ selectedRepresentative?.name }}</h4>
+    <p class="card-category" *ngIf="!isShowingPharmacies">Users Table</p>
+    <p class="card-category" *ngIf="isShowingPharmacies">Pharmacies Table</p>
+    
+    <!-- Back button when showing pharmacies -->
+    <button *ngIf="isShowingPharmacies" class="btn btn-secondary btn-sm float-right" style="margin-top: -38px; margin-right: 10px;" (click)="backToRepresentatives()" data-bs-toggle="" data-bs-placement="">
+      <i class="la la-arrow-left"></i> Back to Representatives
+    </button>
+    
+    <!-- Add button only when showing representatives -->
+    <button *ngIf="!isShowingPharmacies" class="btn btn-primary btn-sm float-right" style="margin-top: -38px;" (click)="openAddModal()" data-bs-toggle="" data-bs-placement="">
       <i class="la la-plus"></i> Add Representative
     </button>
   </div>
   <div class="card-body">
-    <table class="table table-head-bg-success table-striped table-hover">
+    <!-- Representatives Table -->
+    <table *ngIf="!isShowingPharmacies" class="table table-head-bg-success table-striped table-hover">
       <thead>
         <tr>
           <th>ID</th>
@@ -19,20 +29,62 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let rep of representatives; let i = index; trackBy: trackByRepId">
+        <tr *ngFor="let rep of representatives; let i = index; trackBy: trackByRepId" style="cursor: pointer;" (click)="loadPharmaciesForRepresentative(rep)">
           <td>{{ rep.id }}</td>
           <td>{{ rep.name }}</td>
           <td>{{ rep.code }}</td>
           <td>{{ rep.address }}</td>
           <td>{{ rep.governate }}</td>
           <td>
-            <button class="btn btn-danger btn-sm" (click)="openDeleteModal(i)" data-bs-toggle="" data-bs-placement="">
+            <button class="btn btn-danger btn-sm" (click)="openDeleteModal(i); $event.stopPropagation()" data-bs-toggle="" data-bs-placement="">
               <i class="la la-trash"></i> Delete
             </button>
           </td>
         </tr>
       </tbody>
     </table>
+
+    <!-- Pharmacies Table -->
+    <table *ngIf="isShowingPharmacies" class="table table-head-bg-info table-striped table-hover">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Phone Number</th>
+          <th>Governate</th>
+          <th>Username</th>
+          <th>Address</th>
+          <th>Area</th>
+          <th>Order Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let pharmacy of pharmacies">
+          <td>{{ pharmacy.id }}</td>
+          <td>{{ pharmacy.name }}</td>
+          <td>{{ pharmacy.phoneNumber }}</td>
+          <td>{{ pharmacy.governate }}</td>
+          <td>{{ pharmacy.userName }}</td>
+          <td>{{ pharmacy.address }}</td>
+          <td>{{ pharmacy.areaName }}</td>
+          <td>{{ pharmacy.orderCount ?? '-' }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Loading indicator for pharmacies -->
+    <div *ngIf="isShowingPharmacies && loadingPharmacies" class="text-center p-3">
+      <i class="la la-spinner la-spin"></i> Loading pharmacies...
+      <!-- Debug info -->
+      <div class="small text-muted">
+        Debug: isShowingPharmacies={{isShowingPharmacies}}, loadingPharmacies={{loadingPharmacies}}, pharmacies.length={{pharmacies.length}}
+      </div>
+    </div>
+
+    <!-- No data message -->
+    <div *ngIf="isShowingPharmacies && pharmacies.length === 0 && !loadingPharmacies" class="text-center p-3">
+      <p>No pharmacies found for this representative.</p>
+    </div>
   </div>
 </div>
 
